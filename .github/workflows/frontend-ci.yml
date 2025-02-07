@@ -2,15 +2,22 @@ name: Next.js Frontend CI/CD
 
 on:
   push:
+    paths:
+      - "frontend/**"  
     branches:
       - main
   pull_request:
+    paths:
+      - "frontend/**"
     branches:
       - main
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend  
 
     steps:
       - name: Checkout Repository
@@ -21,11 +28,38 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Cache Node Modules
+        uses: actions/cache@v3
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
       - name: Install Dependencies
         run: npm install
+
+      - name: Lint Code
+        run: npm run lint
 
       - name: Build Next.js App
         run: npm run build
 
       - name: Run Tests
         run: npm test || echo "No tests yet"
+
+  docker-build:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: true  
+          tags: duxmazter/nextjs-frontend:${{ github.sha }}

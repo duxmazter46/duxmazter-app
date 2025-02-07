@@ -1,10 +1,14 @@
 name: Go Backend CI/CD
 
-on: 
+on:
   push:
+    paths:
+      - "backend/**"  
     branches:
       - main
   pull_request:
+    paths:
+      - "backend/**"
     branches:
       - main
 
@@ -19,13 +23,43 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21'  # Use the latest Go version
+          go-version: '1.21'
+
+      - name: Cache Go Modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-mod-${{ hashFiles('**/backend/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-mod-
 
       - name: Install Dependencies
+        working-directory: ./backend
         run: go mod tidy
 
+      - name: Lint Code
+        working-directory: ./backend
+        run: go vet ./...
+
       - name: Build Go Backend
+        working-directory: ./backend
         run: go build -v ./...
 
       - name: Run Tests
+        working-directory: ./backend
         run: go test ./...
+
+  docker-build:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true  
+          tags: duxmazter/go-backend:${{ github.sha }}
